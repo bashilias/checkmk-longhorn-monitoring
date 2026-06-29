@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Copyright (c) Ilias Yacoubi (contact@ilias.sh)
+
+LONGHORN_NAMESPACE="longhorn-system"
+
+if ! command -v kubectl >/dev/null 2>&1; then
+    echo "2 Longhorn_Faulted_Volumes - CRITICAL: kubectl not found"
+    exit 0
+fi
+
+if ! kubectl get nodes >/dev/null 2>&1; then
+    echo "2 Longhorn_Faulted_Volumes - CRITICAL: Cannot connect to cluster"
+    exit 0
+fi
+
+all_volumes=$(kubectl get volumes.longhorn.io -n "$LONGHORN_NAMESPACE" --no-headers -o custom-columns="NAME:.metadata.name,ROBUSTNESS:.status.robustness,STATE:.status.state,PVC:.status.kubernetesStatus.pvcName" 2>/dev/null)
+
+if [ $? -ne 0 ] || [ -z "$all_volumes" ]; then
+    echo "2 Longhorn_Faulted_Volumes - CRITICAL: Cannot retrieve volumes"
+    exit 0
+fi
+
+faulted_volumes=$(echo "$all_volumes" | grep "faulted")
+
+if [ -z "$faulted_volumes" ]; then
+    faulted_count=0
+else
+    faulted_count=$(echo "$faulted_volumes" | wc -l)
+fi
+
+if [ "$faulted_count" -eq 0 ]; then
+    echo "0 Longhorn_Faulted_Volumes faulted_volumes=0 OK: No faulted volumes"
+else
+    volume_list=""
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            volume_name=$(echo "$line" | awk '{print $1}')
+            pvc_name=$(echo "$line" | awk '{print $4}')
+            if [ -z "$volume_list" ]; then
+                volume_list="$volume_name($pvc_name)"
+            else
+                volume_list="$volume_list, $volume_name($pvc_name)"
+            fi
+        fi
+    done <<< "$faulted_volumes"
+
+    echo "2 Longhorn_Faulted_Volumes faulted_volumes=$faulted_count CRITICAL: $faulted_count faulted volume(s): $volume_list"
+fi

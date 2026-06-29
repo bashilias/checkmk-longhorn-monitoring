@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Copyright (c) Ilias Yacoubi (contact@ilias.sh)
+
+LONGHORN_NAMESPACE="longhorn-system"
+
+if ! command -v kubectl >/dev/null 2>&1; then
+    echo "2 Longhorn_Attaching_Volumes - CRITICAL: kubectl not found"
+    exit 0
+fi
+
+if ! kubectl get nodes >/dev/null 2>&1; then
+    echo "2 Longhorn_Attaching_Volumes - CRITICAL: Cannot connect to cluster"
+    exit 0
+fi
+
+all_volumes=$(kubectl get volumes.longhorn.io -n "$LONGHORN_NAMESPACE" --no-headers -o custom-columns="NAME:.metadata.name,STATE:.status.state,PVC:.status.kubernetesStatus.pvcName,NODE:.spec.nodeID" 2>/dev/null)
+
+if [ $? -ne 0 ] || [ -z "$all_volumes" ]; then
+    echo "2 Longhorn_Attaching_Volumes - CRITICAL: Cannot retrieve volumes"
+    exit 0
+fi
+
+attaching_volumes=$(echo "$all_volumes" | grep "attaching")
+
+if [ -z "$attaching_volumes" ]; then
+    attaching_count=0
+else
+    attaching_count=$(echo "$attaching_volumes" | wc -l)
+fi
+
+if [ "$attaching_count" -eq 0 ]; then
+    echo "0 Longhorn_Attaching_Volumes attaching_volumes=0 OK: No volumes stuck attaching"
+else
+    volume_list=""
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            volume_name=$(echo "$line" | awk '{print $1}')
+            pvc_name=$(echo "$line" | awk '{print $3}')
+            node_name=$(echo "$line" | awk '{print $4}')
+
+            short_node=$(echo "$node_name" | cut -d'.' -f1)
+
+            if [ -z "$volume_list" ]; then
+                volume_list="$pvc_name on $short_node"
+            else
+                volume_list="$volume_list, $pvc_name on $short_node"
+            fi
+        fi
+    done <<< "$attaching_volumes"
+
+    echo "2 Longhorn_Attaching_Volumes attaching_volumes=$attaching_count CRITICAL: $attaching_count volume(s) stuck attaching: $volume_list"
+fi

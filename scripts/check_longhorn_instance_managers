@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Copyright (c) Ilias Yacoubi (contact@ilias.sh)
+
+LONGHORN_NAMESPACE="longhorn-system"
+
+if ! command -v kubectl >/dev/null 2>&1; then
+    echo "2 Longhorn_Instance_Managers - CRITICAL: kubectl not found"
+    exit 0
+fi
+
+if ! kubectl get nodes >/dev/null 2>&1; then
+    echo "2 Longhorn_Instance_Managers - CRITICAL: Cannot connect to cluster"
+    exit 0
+fi
+
+all_ims=$(kubectl get instancemanagers.longhorn.io -n "$LONGHORN_NAMESPACE" --no-headers -o custom-columns="NAME:.metadata.name,STATE:.status.currentState,NODE:.spec.nodeID" 2>/dev/null)
+
+if [ $? -ne 0 ] || [ -z "$all_ims" ]; then
+    echo "2 Longhorn_Instance_Managers - CRITICAL: Cannot retrieve instance managers"
+    exit 0
+fi
+
+error_ims=$(echo "$all_ims" | grep -E "error|stopped")
+
+if [ -z "$error_ims" ]; then
+    error_count=0
+else
+    error_count=$(echo "$error_ims" | wc -l)
+fi
+
+if [ "$error_count" -eq 0 ]; then
+    total_count=$(echo "$all_ims" | wc -l)
+    echo "0 Longhorn_Instance_Managers error_ims=0|total_ims=$total_count OK: All instance managers running"
+else
+    im_list=""
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            im_name=$(echo "$line" | awk '{print $1}')
+            im_state=$(echo "$line" | awk '{print $2}')
+            im_node=$(echo "$line" | awk '{print $3}')
+            if [ -z "$im_list" ]; then
+                im_list="$im_node($im_state)"
+            else
+                im_list="$im_list, $im_node($im_state)"
+            fi
+        fi
+    done <<< "$error_ims"
+
+    echo "2 Longhorn_Instance_Managers error_ims=$error_count CRITICAL: $error_count instance manager(s) not running: $im_list"
+fi

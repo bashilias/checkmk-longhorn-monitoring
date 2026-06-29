@@ -1,0 +1,19 @@
+{
+  "name": "longhorn-monitoring",
+  "title": "Longhorn Storage Monitoring",
+  "version": "1.0.0",
+  "version.packaged": "1.0.0",
+  "version.min_required": "2.0.0",
+  "version.usable_until": null,
+  "author": "Ilias Yacoubi <contact@ilias.sh>",
+  "download_url": "https://github.com/bashilias/checkmk-longhorn-monitoring",
+  "description": "Comprehensive monitoring for Longhorn distributed block storage on Kubernetes. Monitors faulted volumes, failed jobs, instance manager health, and stuck volume attachments. Requires kubectl access to Kubernetes cluster.",
+  "files": {
+    "agents": [
+      "check_longhorn_faulted",
+      "check_longhorn_failed_jobs",
+      "check_longhorn_instance_managers",
+      "check_longhorn_attaching"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Copyright (c) Ilias Yacoubi (contact@ilias.sh)
+
+LONGHORN_NAMESPACE="longhorn-system"
+
+if ! command -v kubectl >/dev/null 2>&1; then
+    echo "2 Longhorn_Failed_Jobs - CRITICAL: kubectl not found"
+    exit 0
+fi
+
+if ! kubectl get nodes >/dev/null 2>&1; then
+    echo "2 Longhorn_Failed_Jobs - CRITICAL: Cannot connect to cluster"
+    exit 0
+fi
+
+FAILED_JOBS=$(kubectl -n "$LONGHORN_NAMESPACE" get jobs --no-headers 2>/dev/null | awk '$2 == "Failed" {print $1}' | grep -v -i 'trim')
+COUNT=$(echo "$FAILED_JOBS" | grep -c .)
+
+if [[ "$COUNT" -gt 0 ]]; then
+    echo "2 Longhorn_Failed_Jobs failed_jobs=$COUNT CRITICAL: $COUNT failed job(s) in namespace $LONGHORN_NAMESPACE (excluding trim jobs)"
+else
+    echo "0 Longhorn_Failed_Jobs failed_jobs=0 OK: No failed jobs (excluding trim jobs)"
+fi
